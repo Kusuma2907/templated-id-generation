@@ -1,0 +1,81 @@
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: id-generator-mysql
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: id_generator
+
+    ports:
+      - "3307:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-proot"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
+    container_name: id-generator-backend
+
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: id_generator
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      SERVER_PORT: 8080
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    ports:
+      - "8080:8080"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "java -version >/dev/null 2>&1 && exit 0"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    container_name: id-generator-frontend
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    ports:
+      - "3000:80"
+
+volumes:
+  mysql_data:

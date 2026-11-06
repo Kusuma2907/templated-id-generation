@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Templated ID Generator</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        select,
+        input,
+        button {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        button {
+            margin-top: 20px;
+            cursor: pointer;
+        }
+
+        .result {
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+
+        .error {
+            color: #b00020;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Templated ID Generation Service</h1>
+
+<div class="card">
+
+    <h2>Issue IDs</h2>
+
+    <label for="template">
+        Template
+    </label>
+
+    <select id="template"></select>
+
+    <label for="city">
+        City
+    </label>
+
+    <select id="city"></select>
+
+    <label for="count">
+        Count
+    </label>
+
+    <input
+            id="count"
+            type="number"
+            min="1"
+            max="1000"
+            value="1"
+    />
+
+    <button onclick="issueIds()">
+        Issue ID(s)
+    </button>
+
+    <div
+            id="result"
+            class="result">
+    </div>
+
+</div>
+
+<div class="card">
+
+    <h2>Recently Issued IDs</h2>
+
+    <button onclick="loadRecent()">
+        Refresh
+    </button>
+
+    <ul id="recent"></ul>
+
+</div>
+
+<script>
+
+    async function loadConfiguration() {
+
+        const [templatesResponse, citiesResponse] =
+            await Promise.all([
+                fetch("/api/v1/config/templates"),
+                fetch("/api/v1/config/cities")
+            ]);
+
+        const templates =
+            await templatesResponse.json();
+
+        const cities =
+            await citiesResponse.json();
+
+        const templateSelect =
+            document.getElementById("template");
+
+        templates.forEach(template => {
+
+            const option =
+                document.createElement("option");
+
+            option.value = template.id;
+
+            option.textContent =
+                `${template.id} - ${template.name}`;
+
+            templateSelect.appendChild(option);
+        });
+
+        const citySelect =
+            document.getElementById("city");
+
+        cities.forEach(city => {
+
+            const option =
+                document.createElement("option");
+
+            option.value = city.cityCode;
+
+            option.textContent =
+                `${city.cityCode} - ${city.cityName}`;
+
+            citySelect.appendChild(option);
+        });
+
+        await loadRecent();
+    }
+
+    async function issueIds() {
+
+        const templateId =
+            document.getElementById("template").value;
+
+        const city =
+            document.getElementById("city").value;
+
+        const count =
+            Number(
+                document.getElementById("count").value
+            );
+
+        const result =
+            document.getElementById("result");
+
+        result.className = "result";
+
+        try {
+
+            let response;
+
+            if (count === 1) {
+
+                response =
+                    await fetch("/api/v1/ids", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            templateId,
+                            city
+                        })
+                    });
+
+            } else {
+
+                response =
+                    await fetch("/api/v1/ids/bulk", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            templateId,
+                            city,
+                            count
+                        })
+                    });
+            }
+
+            const body =
+                await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    body.message || "Request failed"
+                );
+            }
+
+            result.textContent =
+                JSON.stringify(body, null, 2);
+
+            await loadRecent();
+
+        } catch (error) {
+
+            result.className =
+                "result error";
+
+            result.textContent =
+                error.message;
+        }
+    }
+
+    async function loadRecent() {
+
+        const response =
+            await fetch(
+                "/api/v1/ids/recent?limit=20"
+            );
+
+        const ids =
+            await response.json();
+
+        const list =
+            document.getElementById("recent");
+
+        list.innerHTML = "";
+
+        ids.forEach(item => {
+
+            const li =
+                document.createElement("li");
+
+            li.textContent =
+                `${item.id} | ${item.templateId} | ${item.cityCode}`;
+
+            list.appendChild(li);
+        });
+    }
+
+    loadConfiguration();
+
+</script>
+
+</body>
+</html>
